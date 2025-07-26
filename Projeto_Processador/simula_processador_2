@@ -1,0 +1,17 @@
+# Inicia a simulação da entidade de mais alto nível
+vsim work.processador
+
+# Adiciona todos os sinais do processador à janela de ondas
+add wave -r /processador/*
+
+# 1. Mantém o reset ativo no início
+force rst 1 0 ns
+
+# 2. Inicia o clock com o período original de 0.5 ns
+force clk 0 0 ns, 1 0.125 ns -repeat 0.25 ns
+
+# 3. Desativa o reset de forma segura, em uma borda de descida do clock
+force rst 0 0.20 ns
+
+# 4. Roda a simulação pelo tempo restante para ver o programa executar
+run 25 ns

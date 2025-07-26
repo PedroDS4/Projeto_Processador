@@ -1,0 +1,257 @@
+library ieee;
+use ieee.std_logic_1164.all;
+
+entity maquina_estados is
+    port(
+        clk         : in  std_logic;
+        reset       : in  std_logic;
+        Instruction : in  std_logic_vector(15 downto 0);
+        z_0         : in  std_logic;
+        c_0         : in  std_logic;
+        PC_addr     : out std_logic_vector(7 downto 0);
+        Reg_write   : out std_logic;
+        Mem_write   : out std_logic;
+        MemtoReg    : out std_logic;
+        ULA_key     : out std_logic_vector(2 downto 0);
+        addr_A      : out std_logic_vector(3 downto 0);
+        addr_B      : out std_logic_vector(3 downto 0);
+        addr_C      : out std_logic_vector(3 downto 0);
+	load_flags  : out std_logic;
+	Mem_addr: out std_logic_vector(7 downto 0)
+
+    );
+end entity maquina_estados;
+
+
+architecture main of maquina_estados is
+
+    type st is (s_inicio, s_busca, s_decodifica, s_hlt, s_ldr, s_str, s_mov, s_add, s_sub, s_andd, s_orr, s_nott, s_xorr, s_cmp, s_jmp, s_jnc, s_jc, s_jnz, s_jz);
+    signal estado, proximo_estado : st := s_inicio;
+    
+    signal opcode        : std_logic_vector(3 downto 0);
+    signal Jump, Jump_k  : std_logic;
+    signal Load_PC       : std_logic;
+    signal Jump_addr     : std_logic_vector(7 downto 0);
+    signal Instruction_k : std_logic_vector(15 downto 0);
+    signal IR_load       : std_logic;
+
+    component reg_3 is port (ck, load, clr, set: in  std_logic;
+			 I : in  std_logic_vector(15 downto 0); 
+			 q : out std_logic_vector(15 downto 0)
+		);
+		end component;
+
+    component reg_1bit is port (
+			 ck, load, clr, set: in  std_logic;
+			 I : in  std_logic; 
+			 q : out std_logic
+		);
+		end component;
+
+    component program_counter is port(
+			 clk, reset, load_pc, jump_en: in  std_logic;
+			 jump_addr: in  std_logic_vector(7 downto 0); 
+			 pc_out: out std_logic_vector(7 downto 0)
+		); 
+		end component;
+
+begin
+
+    IR_Reg: reg_3 port map(
+			  ck => clk,
+			  load => IR_load, 
+			  clr => reset, 
+			  set  => '0', 
+			  I    => Instruction, 
+			  q    => Instruction_k);
+
+    Jump_Reg: reg_1bit port map(
+			  ck => clk,
+			  load => '1', 
+			  clr => reset, 
+			  set  => '0',
+			  I    => Jump, 
+			  q    => Jump_k);
+
+    
+    PC_Logic_Unit: program_counter port map(clk => clk, 
+			  reset => reset, 
+			  load_pc => Load_PC, 
+			  jump_en => Jump_k, 
+			  jump_addr => Jump_addr, 
+			  pc_out    => PC_addr);
+
+
+    opcode        <= Instruction_k(15 downto 12);
+    Jump_addr     <= Instruction_k(7 downto 0);
+    
+
+	
+    process (clk, reset)
+    begin
+        if reset = '1' then
+            estado <= s_inicio;
+        elsif rising_edge(clk) then
+            estado <= proximo_estado;
+        end if;
+    end process;
+    
+    process(estado, opcode, Instruction_k, z_0, c_0)
+    begin
+        Load_PC   <= '0'; 
+	Jump <= '0'; 
+	IR_load <= '0'; 
+	Reg_write <= '0'; 
+	Mem_write <= '0'; 
+	MemtoReg  <= '0';
+        ULA_key   <= "111"; 
+	addr_A <= (others => '0'); 
+	addr_B <= (others => '0'); 
+	addr_C <= (others => '0'); 
+	Mem_addr    <=  (others => '1');
+	load_flags <= '0';
+        proximo_estado <= s_inicio;
+
+
+        case estado is
+            when s_inicio =>
+                proximo_estado <= s_busca;
+
+            when s_busca =>
+                IR_load        <= '1;
+                Load_PC        <= '1' and not(Jump_k);
+                proximo_estado <= s_decodifica;
+
+            when s_decodifica =>
+			case opcode is
+             	    	    when "0000" => proximo_estado <= s_hlt;
+                	    when "0001" => proximo_estado <= s_ldr;
+                	    when "0010" => proximo_estado <= s_str;
+                	    when "0011" => proximo_estado <= s_mov;
+                	    when "0100" => proximo_estado <= s_add;
+                	    when "0101" => proximo_estado <= s_sub;
+                	    when "0110" => proximo_estado <= s_andd;
+                	    when "0111" => proximo_estado <= s_orr;
+                	    when "1000" => proximo_estado <= s_nott;
+                	    when "1001" => proximo_estado <= s_xorr;
+                	    when "1010" => proximo_estado <= s_cmp;
+                	    when "1011" => proximo_estado <= s_jmp;
+                	    when "1100" => proximo_estado <= s_jnc;
+                	    when "1101" => proximo_estado <= s_jc;
+                	    when "1110" => proximo_estado <= s_jnz;
+                	    when "1111" => proximo_estado <= s_jz;
+                	    when others => proximo_estado <= s_hlt;
+                	end case;
+            
+            when s_hlt =>
+                Load_PC        <= '0';
+                proximo_estado <= s_hlt;
+
+            when s_ldr =>
+                Reg_write <= '1'; 
+		MemtoReg  <= '1'; 
+		ULA_key   <= "111"; 
+		addr_A    <= Instruction_k(11 downto 8);
+		Mem_addr    <= Instruction_k(7 downto 0);
+                proximo_estado <= s_busca;
+
+            when s_str =>
+                Mem_write <= '1'; 
+		ULA_key   <= "111"; 
+		addr_B    <= Instruction_k(11 downto 8);
+		Mem_addr  <= Instruction_k(7 downto 0);
+                proximo_estado <= s_busca;
+
+            when s_mov =>
+                Reg_write      <= '1';
+		MemtoReg  <= '0';  
+		ULA_key <= "111"; 
+		addr_A <= Instruction_k(7 downto 4); 
+		addr_C <= Instruction_k(3 downto 0);
+                proximo_estado <= s_busca;
+
+            when s_add =>
+                Reg_write      <= '1'; 
+		ULA_key <= "000"; 
+		MemtoReg  <= '0'; 
+		addr_A <= Instruction_k(11 downto 8); 
+		addr_B <= Instruction_k(7 downto 4); 
+		addr_C <= Instruction_k(3 downto 0);
+                proximo_estado <= s_busca;
+
+            when s_sub =>
+                Reg_write      <= '1'; 
+		ULA_key <= "001"; 
+		MemtoReg  <= '0'; 
+		addr_A <= Instruction_k(11 downto 8); 
+		addr_B <= Instruction_k(7 downto 4); 
+		addr_C <= Instruction_k(3 downto 0);
+                proximo_estado <= s_busca;
+
+            when s_andd =>
+                Reg_write      <= '1';
+		MemtoReg  <= '0'; 
+		ULA_key <= "010"; 
+		addr_A <= Instruction_k(11 downto 8); 
+		addr_B <= Instruction_k(7 downto 4); 
+		addr_C <= Instruction_k(3 downto 0);
+                proximo_estado <= s_busca;
+
+            when s_orr =>
+                Reg_write      <= '1'; 
+		ULA_key <= "011"; 
+		MemtoReg  <= '0'; 
+		addr_A <= Instruction_k(11 downto 8); 
+		addr_B <= Instruction_k(7 downto 4); 
+		addr_C <= Instruction_k(3 downto 0);
+                proximo_estado <= s_busca;
+                
+            when s_nott =>
+                Reg_write      <= '1'; 
+		MemtoReg  <= '0'; 
+		ULA_key <= "101"; 
+		addr_A <= Instruction_k(11 downto 8); 
+		addr_B <= Instruction_k(7 downto 4);
+                proximo_estado <= s_busca;
+
+            when s_xorr =>
+                Reg_write      <= '1'; 
+		MemtoReg  <= '0'; 
+		ULA_key <= "100"; 
+		addr_A <= Instruction_k(11 downto 8); 
+		addr_B <= Instruction_k(7 downto 4); 
+		addr_C <= Instruction_k(3 downto 0);
+                proximo_estado <= s_busca;
+                
+            when s_cmp =>
+                Reg_write      <= '0'; 
+		MemtoReg  <= '0'; 
+		load_flags <= '1';
+		ULA_key <= "110"; 
+		addr_A <= Instruction_k(11 downto 8); 	
+		addr_B <= Instruction_k(7 downto 4); 
+		addr_C <= Instruction_k(3 downto 0);
+                proximo_estado <= s_busca;
+
+            when s_jmp =>
+                Jump    <= '1'; 
+                proximo_estado <= s_busca;
+
+            when s_jnc =>
+                if c_0 = '0' then Jump <= '1'; end if;
+                proximo_estado <= s_busca;
+
+            when s_jc =>
+                if c_0 = '1' then Jump <= '1'; end if;
+                proximo_estado <= s_busca;
+                
+            when s_jnz =>
+                if z_0 = '0' then Jump <= '1'; end if;
+                proximo_estado <= s_busca;
+
+            when s_jz =>
+                if z_0 = '1' then Jump <= '1'; end if;
+                proximo_estado <= s_busca;
+        end case;
+    end process;
+end architecture main;

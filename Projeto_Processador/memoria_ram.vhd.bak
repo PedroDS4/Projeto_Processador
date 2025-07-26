@@ -1,0 +1,43 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity ram256_8b is
+    port (
+        clk    : in  std_logic;
+        w_en   : in  std_logic;
+        addr   : in  std_logic_vector(7 downto 0);
+        w_data : in  std_logic_vector(7 downto 0);
+        r_data : out std_logic_vector(7 downto 0)
+    );
+end entity ram256_8b;
+
+architecture ckt of ram256_8b is
+
+    type memoria_ram is array (0 to 255) of std_logic_vector (7 downto 0);
+
+    -- RAM inicializada para o programa de conversão ASCII com valores em binário
+    signal RAM : memoria_ram := (
+        0      => B"01111011", -- Número a ser convertido: 123
+        1      => B"01100100", -- Constante 100
+        2      => B"00001010", -- Constante 10
+        3      => B"00110000", -- Constante 48 (offset ASCII '0')
+        4      => B"00000000", -- Constante 0
+        5      => B"00000001", -- Constante 1
+        others => B"00000000"
+    );
+    
+begin
+
+    process (clk)
+    begin
+        if rising_edge(clk) then
+            if w_en = '1' then
+                RAM(to_integer(unsigned(addr))) <= w_data;
+            end if;
+        end if;
+    end process;
+    
+    r_data <= RAM(to_integer(unsigned(addr)));
+
+end ckt;

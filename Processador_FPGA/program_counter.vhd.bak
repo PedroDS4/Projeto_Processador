@@ -1,0 +1,141 @@
+library ieee;
+
+use ieee.std_logic_1164.all;
+
+
+
+entity program_counter is
+
+    port(
+
+        clk       : in  std_logic;
+
+        reset     : in  std_logic;
+
+        load_pc   : in  std_logic;
+
+        jump_en   : in  std_logic;
+
+        jump_addr : in  std_logic_vector(7 downto 0);
+
+        pc_out    : out std_logic_vector(7 downto 0)
+
+    );
+
+end entity program_counter;
+
+
+
+architecture structural of program_counter is
+
+
+
+    component reg_N is
+
+        port (ck, load, clr, set: in  std_logic;
+
+              I : in  std_logic_vector(7 downto 0);
+
+              q : out std_logic_vector(7 downto 0));
+
+    end component;
+
+
+
+    component mux_1 is
+
+        port(A  : in  std_logic_vector(7 downto 0);
+
+             B  : in  std_logic_vector(7 downto 0);
+
+             Sl : in  std_logic;
+
+             Y  : out std_logic_vector(7 downto 0));
+
+    end component;
+
+
+
+    -- Declaração do seu somador, sem a porta de carry-in
+
+    component somador_8_bits is
+
+        port(A,B : in  std_logic_vector(7 downto 0);
+
+             C_0 : out std_logic;
+
+             S   : out std_logic_vector(7 downto 0));
+
+    end component;
+
+
+
+    signal pc_current_val, mux_out, pc_plus_1 : std_logic_vector(7 downto 0);
+
+    signal carry_out_soma                  : std_logic;
+
+
+
+begin
+
+    
+
+    -- Lógica de incremento revertida para usar seu somador
+
+    Adder_PC: somador_8_bits port map(
+
+        A   => pc_current_val,
+
+        B   => "00000001", -- Somando o valor constante 1
+
+        C_0 => carry_out_soma,
+
+        S   => pc_plus_1
+
+    );
+
+
+
+    -- MUX 2x1 com a correção principal (entradas na ordem correta)
+
+    Mux_PC: mux_1 port map(
+
+        A  => pc_plus_1,
+
+        B  => jump_addr,
+
+        Sl => jump_en,
+
+        Y  => mux_out
+
+    );
+
+
+
+    -- Registrador do PC
+
+    PC_Register: reg_N port map(
+
+        ck   => clk,
+
+        load => load_pc,
+
+        clr  => reset,
+
+        set  => '0',
+
+        I    => mux_out,
+
+        q    => pc_current_val
+
+    );
+
+
+
+    -- Saída final do componente
+
+    pc_out <= pc_current_val;
+
+
+
+end architecture structural;
